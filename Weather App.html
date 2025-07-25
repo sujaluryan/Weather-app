@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>5-Day Weather Forecast</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Font Awesome for Weather Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background-image: linear-gradient(to bottom, #ff7e5f, #feb47b);
+      color: #fff;
+      overflow-x: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      height: 100vh;
+      scroll-behavior: smooth;
+    }
+
+    .container {
+      background: rgba(255, 255, 255, 0.85);
+      padding: 3rem;
+      border-radius: 15px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+      max-width: 850px;
+      width: 100%;
+      margin-top: 3rem;
+      text-align: center;
+      backdrop-filter: blur(10px);
+      transition: transform 0.3s ease-out;
+      animation: fadeIn 1s ease-in-out;
+    }
+
+    .container h2 {
+      font-size: 2.5rem;
+      margin-bottom: 1.5rem;
+      font-weight: 600;
+      color: #333;
+      text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    input {
+      padding: 1rem;
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+      width: 100%;
+      border-radius: 10px;
+      border: 2px solid #ddd;
+      outline: none;
+      transition: border-color 0.3s ease;
+    }
+
+    input:focus {
+      border-color: #007bff;
+    }
+
+    button {
+      padding: 1rem;
+      font-size: 1.2rem;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background-color 0.3s, transform 0.2s;
+      margin-bottom: 1rem;
+      width: 100%;
+    }
+
+    button:hover {
+      background: #0056b3;
+      transform: translateY(-3px);
+    }
+
+    button:active {
+      background: #004085;
+    }
+
+    .error {
+      color: red;
+      margin-top: 1rem;
+      font-size: 1rem;
+    }
+
+    canvas {
+      margin-top: 2rem;
+      max-width: 100%;
+      height: auto;
+      border-radius: 10px;
+    }
+
+    /* Weather Icons Styling */
+    .weather-icons {
+      font-size: 4rem;
+      margin-top: 1rem;
+      font-weight: bold; /* Make icons bold */
+    }
+
+    /* Specific weather colors */
+    .sunny {
+      color: #ffcc00; /* Bright Yellow for Sunny */
+    }
+
+    .cloudy {
+      color: #888888; /* Gray for Cloudy */
+    }
+
+    .rainy {
+      color: #0066cc; /* Blue for Rainy */
+    }
+
+    .stormy {
+      color: #ff0000; /* Red for Stormy */
+    }
+
+    .snowy {
+      color: #00bfff; /* Light Blue for Snowy */
+    }
+
+    .weather-description {
+      font-size: 1.2rem;
+      margin-top: 1rem;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 2rem;
+      }
+
+      h2 {
+        font-size: 2rem;
+      }
+
+      input, button {
+        font-size: 1rem;
+      }
+    }
+
+    /* Fade-In Animation */
+    @keyframes fadeIn {
+      0% {
+        opacity: 0;
+        transform: translateY(-30px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h2>5-Day Weather Forecast</h2>
+    <input id="cityInput" type="text" placeholder="Enter city name" />
+    <button onclick="getForecast()">Get Forecast</button>
+    <div class="error" id="error"></div>
+    <div id="weatherIcons" class="weather-icons"></div>
+    <div id="weatherDescription" class="weather-description"></div>
+    <canvas id="tempChart"></canvas>
+    <canvas id="humidityChart"></canvas>
+  </div>
+
+  <script>
+    async function getForecast() {
+      const city = document.getElementById("cityInput").value.trim();
+      const apiKey = "652ab49cb5014ea2eb81df9b36c0a5d3"; // Replace with your real API key
+      const errorEl = document.getElementById("error");
+      const weatherIconsEl = document.getElementById("weatherIcons");
+      const weatherDescriptionEl = document.getElementById("weatherDescription");
+
+      if (!city) {
+        errorEl.textContent = "Please enter a city name.";
+        return;
+      }
+
+      const url = `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${apiKey}&units=metric`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message);
+
+        const daily = {};
+        data.list.forEach(item => {
+          const date = item.dt_txt.split(' ')[0];
+          if (!daily[date]) {
+            daily[date] = { temp: [], humidity: [], description: [], icon: [] };
+          }
+          daily[date].temp.push(item.main.temp);
+          daily[date].humidity.push(item.main.humidity);
+          daily[date].description.push(item.weather[0].description);
+          daily[date].icon.push(item.weather[0].icon);
+        });
+
+        const labels = Object.keys(daily).slice(0, 5);
+        const avgTemp = labels.map(d => avg(daily[d].temp));
+        const avgHumidity = labels.map(d => avg(daily[d].humidity));
+
+        renderChart("tempChart", "Average Temperature (°C)", labels, avgTemp, "#ff6384");
+        renderChart("humidityChart", "Average Humidity (%)", labels, avgHumidity, "#36a2eb");
+
+        const icons = daily[labels[0]].icon; // Get the icon for the first day
+        const description = daily[labels[0]].description[0]; // Access the first description in the array
+        const weatherClass = getWeatherClass(icons[0]);
+
+        weatherIconsEl.innerHTML = `<i class="fas fa-${getWeatherIcon(icons[0])} ${weatherClass}"></i>`; // Show icon with class for color
+        weatherDescriptionEl.textContent = description.charAt(0).toUpperCase() + description.slice(1); 
+        errorEl.textContent = "";
+
+      } catch (err) {
+        errorEl.textContent = "Error: " + err.message;
+      }
+    }
+
+    function avg(arr) {
+      return (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2);
+    }
+
+    function getWeatherIcon(iconCode) {
+      switch (iconCode) {
+        case "01d": return "sun";
+        case "02d": return "cloud-sun";
+        case "03d": return "cloud";
+        case "04d": return "cloud-meatball";
+        case "09d": return "cloud-showers-heavy";
+        case "10d": return "cloud-sun-rain";
+        case "11d": return "poo-storm";
+        case "13d": return "snowflake";
+        case "50d": return "smog";
+        default: return "cloud";
+      }
+    }
+
+    function getWeatherClass(iconCode) {
+      switch (iconCode) {
+        case "01d": return "sunny";
+        case "02d": return "cloudy";
+        case "03d": return "cloudy";
+        case "04d": return "cloudy";
+        case "09d": return "rainy";
+        case "10d": return "rainy";
+        case "11d": return "stormy";
+        case "13d": return "snowy";
+        case "50d": return "cloudy";
+        default: return "cloudy";
+      }
+    }
+
+    function renderChart(id, label, labels, data, color) {
+      const ctx = document.getElementById(id).getContext('2d');
+      if (window[id + "Instance"]) window[id + "Instance"].destroy();
+
+      window[id + "Instance"] = new Chart(ctx, {
+        type: id === "humidityChart" ? "bar" : "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: label,
+            data: data,
+            backgroundColor: color,
+            borderColor: color,
+            borderWidth: 2,
+            fill: false,
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+</html>
